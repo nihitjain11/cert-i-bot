@@ -1,0 +1,38 @@
+app:
+  schedule: "0 7 20 * *" # At 07:00 GMT on day-of-month 20 in every month
+  environment: env
+  name: certibot
+  version: stable
+  image: 
+    name: "gcr.io/gcp-project/certibot"
+    tag: "stable"
+  imagePullPolicy: "Always"
+  env:
+    DNS_PROJECT: "gcp-project"
+    DNS_PROJECT_CREDS: /creds/gcp-project-creds.json
+    EMAIL: nihitjain11@gmail.com
+    DOMAIN_NAME: nihitjain.com,*.nihitjain.com
+    DNS_ZONE_NAME: nihitjain-com
+    ROOT_DOMAIN: nihitjain.com.
+    PROJECT_NAME: gcp-project
+    CREDS_FILE: /creds/gcp-project-creds.json
+    CLUSTER_NAME: gcp-project-k8s-cluster
+    REGION: us-east1
+    NAMESPACE: istio-system
+    CERT_NAME: nihitjain-env-wildcard-cert
+    PUBLIC_INGRESS: istio-ingress
+    PUBLIC_LB_TARGET_GROUP: k8s2-ts-someval-istio-system-istio-ingress-anotherval
+    INTERNAL_INGRESS: gcp-project-k8s-cluster-internal-ingress
+    INTERNAL_LB_TARGET_GROUP: k8s2-ts-someval-istio-system-gcp-project-k8s-cluster-internal-ingr-anotherval
+    SENDER_EMAIL: "nihitjain11@gmail.com"
+    RECEIVER_EMAIL: "nihitjain11+certbot@gmail.com"
+    PASS: "tryandguess.xD"
+    SLACK_ALERT_CHANNEL: "\"#gcp-alerts-k8s\""
+    SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/This/needs/toBeSetUp"
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+    requests:
+      cpu: 500m
+      memory: 256Mi

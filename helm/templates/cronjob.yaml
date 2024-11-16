@@ -1,0 +1,100 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: certibot
+  namespace: certibot
+spec:
+  schedule: "{{ .Values.app.schedule }}"
+  concurrencyPolicy: Replace #replace the currently running job with a new job.
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 30
+      template:
+        metadata:
+          labels:
+            app: certibot
+            tags.datadoghq.com/env: "{{ .Values.app.environment }}"
+            tags.datadoghq.com/service: "{{ .Values.app.name }}"
+            tags.datadoghq.com/version: "{{ .Values.app.version }}"
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: certibot
+            image: "{{ .Values.app.image.name }}:{{ .Values.app.image.tag }}"
+            imagePullPolicy: {{ .Values.app.imagePullPolicy }}
+            command: ["/bin/bash","-c","/app/certbot_ssl_mtls_script.sh"] 
+            # command: ["python3", "bashcmd.py", "certbot_ssl_mtls_script.sh"] #This is currently Broken
+            # command: ["sh", "-c", "tail -f /dev/null"] # for debugging # to be run only incase it needs troubleshooting from inside the container
+            env:
+            - name: DNS_PROJECT
+              value: {{ .Values.app.env.DNS_PROJECT }}
+            - name: DNS_PROJECT_CREDS
+              value: {{ .Values.app.env.DNS_PROJECT_CREDS }}
+            - name: EMAIL
+              value: {{ .Values.app.env.EMAIL }}
+            - name: DOMAIN_NAME
+              value: {{ .Values.app.env.DOMAIN_NAME }}
+            - name: DNS_ZONE_NAME
+              value: {{ .Values.app.env.DNS_ZONE_NAME }}
+            - name: ROOT_DOMAIN
+              value: {{ .Values.app.env.ROOT_DOMAIN }}
+            - name: PROJECT_NAME
+              value: {{ .Values.app.env.PROJECT_NAME }} 
+            - name: CREDS_FILE
+              value: {{ .Values.app.env.CREDS_FILE }}
+            - name: CLUSTER_NAME
+              value: {{ .Values.app.env.CLUSTER_NAME }}
+            - name: REGION
+              value: {{ .Values.app.env.REGION }}
+            - name: NAMESPACE
+              value: {{ .Values.app.env.NAMESPACE }} 
+            - name: CERT_NAME
+              value: {{ .Values.app.env.CERT_NAME }}
+            - name: PUBLIC_INGRESS
+              value: {{ .Values.app.env.PUBLIC_INGRESS }}
+            - name: PUBLIC_LB_TARGET_GROUP
+              value: {{ .Values.app.env.PUBLIC_LB_TARGET_GROUP }}
+            - name: INTERNAL_INGRESS
+              value: {{ .Values.app.env.INTERNAL_INGRESS }}
+            - name: INTERNAL_LB_TARGET_GROUP
+              value: {{ .Values.app.env.INTERNAL_LB_TARGET_GROUP }}
+            - name: SENDER_EMAIL
+              value: {{ .Values.app.env.SENDER_EMAIL }} 
+            - name: RECEIVER_EMAIL
+              value: {{ .Values.app.env.RECEIVER_EMAIL }} 
+            - name: PASS
+              value: {{ .Values.app.env.PASS }}  
+            - name: SLACK_ALERT_CHANNEL
+              value: {{ .Values.app.env.SLACK_ALERT_CHANNEL }}
+            - name: SLACK_WEBHOOK_URL
+              value: {{ .Values.app.env.SLACK_WEBHOOK_URL }}
+            # Datadog Env Vars
+            - name: DD_ENV
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.labels['tags.datadoghq.com/env']
+            - name: DD_SERVICE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.labels['tags.datadoghq.com/service']
+            - name: DD_VERSION
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.labels['tags.datadoghq.com/version']
+            - name: DD_AGENT_HOST
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.hostIP
+            - name: DD_LOGS_INJECTION
+              value: "true"
+            resources:
+              limits:
+                cpu: {{ .Values.app.resources.limits.cpu }}
+                memory: {{ .Values.app.resources.limits.memory }}
+              requests:
+                cpu: {{ .Values.app.resources.requests.cpu }}
+                memory: {{ .Values.app.resources.requests.memory }}
