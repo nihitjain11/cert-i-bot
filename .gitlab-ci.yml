@@ -1,0 +1,97 @@
+stages:
+  - build
+  - push
+  - env_deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  GCR_REGISTRY: gcr.io/gcp-project/${CI_PROJECT_NAME}
+  GCR_IMAGE_TAG: gcr.io/gcp-project/${CI_PROJECT_NAME}:${CI_COMMIT_SHORT_SHA}
+  GITLAB_IMAGE_CACHE_TAG: $CI_REGISTRY_IMAGE:cache
+  GITLAB_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+
+build:
+  stage: build
+  image: docker:stable
+  services:
+    - docker:dind
+  before_script:
+    - mkdir -p ~/.docker
+    - echo $CI_JOB_TOKEN | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
+  script:
+    - docker build --cache-from ${GITLAB_IMAGE_CACHE_TAG} . -t ${GITLAB_IMAGE_TAG} -t ${GITLAB_IMAGE_CACHE_TAG} -t ${GCR_IMAGE_TAG}
+    - docker push ${GITLAB_IMAGE_TAG}
+    - docker push ${GITLAB_IMAGE_CACHE_TAG}
+  after_script:
+    - rm -rf ~/.docker/*
+
+push:
+  stage: push
+  image: docker:stable
+  services:
+    - docker:dind
+  before_script:
+    - mkdir -p ~/.docker
+    - cp ${GCR_SERVICE_ACCOUNT_KEY} ~/.docker/gcr_credentials.json
+    - docker login -u _json_key -p "$(cat ~/.docker/gcr_credentials.json)" https://${GCR_REGISTRY}
+    - echo $CI_JOB_TOKEN | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+  script:
+    - docker pull ${GITLAB_IMAGE_TAG}
+    - docker tag ${GITLAB_IMAGE_TAG} ${GCR_IMAGE_TAG}
+    - docker push ${GCR_IMAGE_TAG}
+  after_script:
+    - rm -rf ~/.docker/*
+
+.deploy:
+  image: gcr.io/gcp-project/k8s-deployer
+  before_script:
+    - helm version
+    - cat ${GCR_SERVICE_ACCOUNT_KEY} | helm registry login -u _json_key --password-stdin https://us-docker.pkg.dev
+  script:
+    - helm upgrade --install ${RELEASE_NAME}
+        --create-namespace
+        --namespace ${RELEASE_NAMESPACE}
+        --set env=${CI_ENVIRONMENT_NAME}
+        --set app.image.name=${IMAGE_URL}
+        --set app.image.tag=${IMAGE_TAG}
+        --set app.version=${IMAGE_TAG}
+        --set version=${IMAGE_TAG}
+        ./helm
+        -f ./helm/values-${CI_ENVIRONMENT_NAME}.yaml
+        --debug
+        --wait
+        --timeout 15m0s
+
+# .rollback:
+#   image: gcr.io/gcp-project/k8s-deploy
+#   before_script:
+#   - helm version
+#   script:
+#     - helm rollback ${RELEASE_NAME} 0
+#         --namespace ${RELEASE_NAMESPACE}
+#         --wait
+
+env_deploy:
+  extends: .deploy
+  stage: env_deploy
+  variables:
+    RELEASE_NAME: ${CI_PROJECT_NAME}
+    RELEASE_NAMESPACE: ${CI_PROJECT_NAME}
+    IMAGE_URL: ${GCR_REGISTRY}
+    IMAGE_TAG: ${CI_COMMIT_SHORT_SHA}
+  environment:
+    name: env
+  tags:
+    - env
+
+# env_rollback:
+#   extends: .rollback
+#   stage: env_deploy
+#   variables:
+#     RELEASE_NAME: ${CI_PROJECT_NAME}
+#     RELEASE_NAMESPACE: ${CI_PROJECT_NAME}
+#   environment:
+#     name: env
+#   tags:
+#     - env
